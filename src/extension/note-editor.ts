@@ -7,6 +7,7 @@ import type {
   NoteLinkResult,
   WebviewToHostMessage,
 } from '../core/editor-messages';
+import { sameNoteJson } from '../core/note';
 import { rankNoteLinks } from '../core/note-link-search';
 import { type NoteListing, listAllNotes, resolveNotePath } from '../core/note-listing';
 import { getNoatHome } from '../core/paths';
@@ -137,6 +138,16 @@ export class NoteEditorProvider implements vscode.CustomTextEditorProvider {
       const text = document.getText();
       // Skip the echo of an edit the webview itself just made.
       if (text === lastWebviewText) return;
+      // Skip formatting-only rewrites of the webview's own edit. Autosave runs
+      // through VS Code, so save participants (editor.formatOnSave,
+      // files.insertFinalNewline, trailing-whitespace trimming) can rewrite the
+      // bytes without changing the note. Posting an update for those remounts
+      // BlockNote and drops the caret on every autosave.
+      if (lastWebviewText !== undefined && sameNoteJson(text, lastWebviewText)) {
+        // Adopt the normalized text so later exact-match checks stay cheap.
+        lastWebviewText = text;
+        return;
+      }
       post({ type: 'update', text });
     });
 
