@@ -48,6 +48,42 @@ export function parseNote(raw: string): NoteFile {
   return noteFileSchema.parse(JSON.parse(raw));
 }
 
+/** Recursively sort object keys so formatting-only reorders compare equal. */
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .sort()
+        .map((key) => [key, canonicalize((value as Record<string, unknown>)[key])])
+    );
+  }
+  return value;
+}
+
+/**
+ * Whether two raw note strings encode the same JSON value, ignoring formatting
+ * differences (whitespace, indentation, trailing newline, object key order).
+ *
+ * The custom editor autosaves through VS Code, so save participants such as
+ * `editor.formatOnSave` or `files.insertFinalNewline` can rewrite the on-disk
+ * bytes without changing the note's content. Treating those reformats as real
+ * external edits remounts the webview and drops the caret mid-typing, so the
+ * host uses this to tell a cosmetic reformat apart from a genuine change.
+ *
+ * Returns false if either side is not parseable JSON, so genuinely corrupt or
+ * unexpected content is still surfaced to the webview.
+ */
+export function sameNoteJson(a: string, b: string): boolean {
+  try {
+    return (
+      JSON.stringify(canonicalize(JSON.parse(a))) === JSON.stringify(canonicalize(JSON.parse(b)))
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Turn a note title into a safe filename (without extension). */
 export function titleToFileName(title: string): string {
   const cleaned = title
