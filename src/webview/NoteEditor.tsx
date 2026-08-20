@@ -3,8 +3,10 @@ import {
   BlockNoteSchema,
   type PartialBlock,
   createCodeBlockSpec,
+  createStyleSpec,
   defaultBlockSpecs,
   defaultInlineContentSpecs,
+  defaultStyleSpecs,
 } from '@blocknote/core';
 import { SuggestionMenu, filterSuggestionItems } from '@blocknote/core/extensions';
 import { BlockNoteView } from '@blocknote/mantine';
@@ -52,6 +54,27 @@ const codeBlock = createCodeBlockSpec({
   },
 });
 
+/**
+ * Superscript and subscript, for exponents and chemistry. BlockNote ships
+ * neither, so they are custom boolean styles rendering plain `<sup>`/`<sub>`.
+ * The tags carry the meaning, so `toExternalHTML` is left to default and the
+ * markdown bridge in src/mcp/markdown.ts recognises them by tag name.
+ */
+const verticalStyle = (tag: 'sup' | 'sub', type: 'superscript' | 'subscript') =>
+  createStyleSpec(
+    { type, propSchema: 'boolean' },
+    {
+      render: () => {
+        const dom = document.createElement(tag);
+        return { dom, contentDOM: dom };
+      },
+      parse: (element) => (element.tagName.toLowerCase() === tag ? true : undefined),
+    }
+  );
+
+const superscript = verticalStyle('sup', 'superscript');
+const subscript = verticalStyle('sub', 'subscript');
+
 const schema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
@@ -61,6 +84,11 @@ const schema = BlockNoteSchema.create({
     ...defaultInlineContentSpecs,
     fileLink: FileLink,
     noteLink: NoteLink,
+  },
+  styleSpecs: {
+    ...defaultStyleSpecs,
+    superscript,
+    subscript,
   },
 });
 
@@ -279,25 +307,36 @@ export function NoteEditor({
     return true;
   };
 
+  // Superscript and subscript are mutually exclusive, so turning one on clears
+  // the other rather than nesting `<sup>` inside `<sub>`.
+  const toggleVertical = (style: 'superscript' | 'subscript'): void => {
+    const other = style === 'superscript' ? 'subscript' : 'superscript';
+    if (editor.getActiveStyles()[other]) editor.removeStyles({ [other]: true });
+    editor.toggleStyles({ [style]: true });
+  };
+
   // Slack-style code formatting: Mod+Shift+C toggles inline code on the
   // selection, Mod+Shift+Alt+C toggles the selected blocks into a code block.
-  // Runs in the capture phase so nothing inside ProseMirror can consume the
-  // event first. event.code is used because Alt+C produces a different
-  // event.key on macOS.
+  // Mod+Shift+. and Mod+Shift+, toggle superscript and subscript. Runs in the
+  // capture phase so nothing inside ProseMirror can consume the event first.
+  // event.code is used because Alt+C produces a different event.key on macOS,
+  // and because Shift turns "." and "," into ">" and "<".
   const onEditorKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (onToggleKeyDown(event)) {
       event.preventDefault();
       event.stopPropagation();
       return;
     }
-    if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.code !== 'KeyC') return;
+    if (!(event.metaKey || event.ctrlKey) || !event.shiftKey) return;
+    const action = {
+      KeyC: () => (event.altKey ? toggleCodeBlock() : editor.toggleStyles({ code: true })),
+      Period: () => toggleVertical('superscript'),
+      Comma: () => toggleVertical('subscript'),
+    }[event.code];
+    if (!action) return;
     event.preventDefault();
     event.stopPropagation();
-    if (event.altKey) {
-      toggleCodeBlock();
-    } else {
-      editor.toggleStyles({ code: true });
-    }
+    action();
   };
 
   return (
