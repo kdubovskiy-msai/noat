@@ -212,12 +212,84 @@ export function NoteEditor({
     }
   };
 
+  /**
+   * The `.bn-toggle-wrapper` of the toggle block holding the cursor, or null
+   * when the cursor isn't in one. Toggleable headings and toggleListItems both
+   * render one; the wrapper holds only the toggle's own title, since child
+   * blocks live in a sibling `.bn-block-group`.
+   */
+  const toggleWrapperAtCursor = (): HTMLElement | null => {
+    const blockEl = document.querySelector(
+      `[data-id="${CSS.escape(editor.getTextCursorPosition().block.id)}"]`
+    );
+    return blockEl?.querySelector<HTMLElement>('.bn-toggle-wrapper') ?? null;
+  };
+
+  /** True when the collapsed cursor sits after the last character of `content`. */
+  const cursorAtEndOf = (content: Element): boolean => {
+    const selection = window.getSelection();
+    if (!selection?.isCollapsed || !selection.anchorNode) return false;
+    if (!content.contains(selection.anchorNode)) return false;
+    const rest = document.createRange();
+    rest.setStart(selection.anchorNode, selection.anchorOffset);
+    rest.setEndAfter(content);
+    return rest.toString().length === 0;
+  };
+
+  /** Add an empty first child to a toggle and put the cursor in it. */
+  const enterToggleBody = (): void => {
+    const block = editor.getTextCursorPosition().block;
+    const firstChild = block.children[0];
+    if (firstChild) {
+      const [inserted] = editor.insertBlocks([{ type: 'paragraph' }], firstChild, 'before');
+      if (inserted) editor.setTextCursorPosition(inserted, 'end');
+      return;
+    }
+    const created = editor.updateBlock(block, { children: [{ type: 'paragraph' }] }).children[0];
+    if (created) editor.setTextCursorPosition(created.id, 'end');
+  };
+
+  /**
+   * Notion-style toggle keys. Mod+Enter opens or closes the toggle holding the
+   * cursor; plain Enter at the end of an open toggle's title drops into its
+   * body instead of creating a sibling after it.
+   *
+   * Open/closed state lives in localStorage behind BlockNote's own click
+   * handler and no editor command exposes it, so this clicks the same button —
+   * that keeps the stored state, the `data-show-children` attribute and the
+   * "add block" affordance in sync instead of adding a second source of truth.
+   */
+  const onToggleKeyDown = (event: KeyboardEvent<HTMLDivElement>): boolean => {
+    if (event.key !== 'Enter' || event.shiftKey || event.altKey) return false;
+    // An open suggestion menu owns Enter for picking its highlighted item.
+    if (document.querySelector('.bn-suggestion-menu')) return false;
+
+    const wrapper = toggleWrapperAtCursor();
+    if (!wrapper) return false;
+
+    if (event.metaKey || event.ctrlKey) {
+      wrapper.querySelector<HTMLButtonElement>('.bn-toggle-button')?.click();
+      return true;
+    }
+
+    const content = wrapper.querySelector('.bn-inline-content');
+    if (wrapper.getAttribute('data-show-children') !== 'true') return false;
+    if (!content || !cursorAtEndOf(content)) return false;
+    enterToggleBody();
+    return true;
+  };
+
   // Slack-style code formatting: Mod+Shift+C toggles inline code on the
   // selection, Mod+Shift+Alt+C toggles the selected blocks into a code block.
   // Runs in the capture phase so nothing inside ProseMirror can consume the
   // event first. event.code is used because Alt+C produces a different
   // event.key on macOS.
-  const onFormattingKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+  const onEditorKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (onToggleKeyDown(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.code !== 'KeyC') return;
     event.preventDefault();
     event.stopPropagation();
@@ -254,7 +326,7 @@ export function NoteEditor({
           }}
         />
       </div>
-      <div onKeyDownCapture={onFormattingKeyDown}>
+      <div onKeyDownCapture={onEditorKeyDown}>
         <BlockNoteView
           editor={editor}
           theme={isDark ? 'dark' : 'light'}
