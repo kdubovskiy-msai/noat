@@ -21,6 +21,7 @@ import { type NoteFile, serializeNote } from '../core/note';
 import { FileLink } from './FileLink';
 import { NoteIconPicker } from './NoteIconPicker';
 import { NoteLink } from './NoteLink';
+import { resolveAssetUrl, saveAsset } from './asset-client';
 import { searchWorkspaceFiles } from './file-search-client';
 import { searchNotes } from './note-search-client';
 import { smartArrows } from './smart-arrows';
@@ -100,6 +101,11 @@ export function NoteEditor({
   const editor = useCreateBlockNote({
     schema,
     extensions: [smartArrows],
+    // Local images (picked, pasted, or dropped) are stored in the note
+    // store's assets dir; notes keep store-relative URLs that only resolve
+    // to loadable webview URIs at render time.
+    uploadFile: saveAsset,
+    resolveFileUrl: async (url) => resolveAssetUrl(url),
     initialContent: note.blocks.length > 0 ? (note.blocks as unknown as PartialBlock[]) : undefined,
   });
 
