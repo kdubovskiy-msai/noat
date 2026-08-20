@@ -15,7 +15,7 @@ import {
   useCreateBlockNote,
 } from '@blocknote/react';
 import { createParser } from 'prosemirror-highlight/shiki';
-import { type KeyboardEvent, useEffect, useState } from 'react';
+import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { NOTE_ICON, noteIconForStorage, resolveNoteIcon } from '../core/display-icons';
 import { type NoteFile, serializeNote } from '../core/note';
 import { FileLink } from './FileLink';
@@ -89,9 +89,11 @@ function useVsCodeDarkTheme(): boolean {
 
 export function NoteEditor({
   note,
+  externalRevision,
   onEdit,
 }: {
   note: NoteFile;
+  externalRevision: number;
   onEdit: (text: string) => void;
 }) {
   const [title, setTitle] = useState(note.title);
@@ -120,6 +122,37 @@ export function NoteEditor({
       })
     );
   };
+
+  // Set while we push host content into the editor, so the resulting
+  // onChange doesn't echo straight back as a fresh edit — that would restamp
+  // updatedAt and re-dirty the document the user just reverted.
+  const applyingExternal = useRef(false);
+  const appliedRevision = useRef(externalRevision);
+
+  // Re-apply external changes (VS Code undo, agent writes, git-sync) into the
+  // live editor instead of remounting it. A remount rebuilds the ProseMirror
+  // state from scratch, which drops focus and the selection every time.
+  useEffect(() => {
+    if (appliedRevision.current === externalRevision) return;
+    appliedRevision.current = externalRevision;
+
+    const cursor = editor.getTextCursorPosition();
+    applyingExternal.current = true;
+    try {
+      editor.replaceBlocks(editor.document, note.blocks as unknown as PartialBlock[]);
+    } finally {
+      applyingExternal.current = false;
+    }
+    setTitle(note.title);
+    setIcon(noteIconForStorage(note.icon));
+
+    // Block ids are stable across external rewrites, so the caret can go back
+    // where it was whenever its block survived the change.
+    if (editor.getBlock(cursor.block.id)) {
+      editor.setTextCursorPosition(cursor.block.id, 'end');
+      editor.focus();
+    }
+  }, [externalRevision, note, editor]);
 
   const getFileItems = async (query: string): Promise<DefaultReactSuggestionItem[]> =>
     (await searchWorkspaceFiles(query)).map((file) => ({
@@ -226,7 +259,10 @@ export function NoteEditor({
           editor={editor}
           theme={isDark ? 'dark' : 'light'}
           slashMenu={false}
-          onChange={() => emit(title, icon)}
+          onChange={() => {
+            if (applyingExternal.current) return;
+            emit(title, icon);
+          }}
         >
           <SuggestionMenuController triggerCharacter="@" getItems={getFileItems} />
           {/* Replaces the default slash menu to add the "Page" item; the
