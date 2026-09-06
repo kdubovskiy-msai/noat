@@ -1,7 +1,7 @@
 import { useBlockNoteEditor, useComponentsContext, useEditorState } from '@blocknote/react';
 import type { NoteFile } from '../core/note';
 import { blocksToPlainText } from '../core/note-text';
-import type { schema } from './schema';
+import type { NoatEditor, schema } from './schema';
 
 const DISPLAY_PATTERN = /^\$\$([\s\S]+)\$\$$/;
 const INLINE_PATTERN = /^\$([\s\S]+)\$$/;
@@ -28,9 +28,25 @@ export function mathFromSelection(
 }
 
 /**
- * Turns a text selection into math, so LaTeX pasted as plain text can be
- * rendered in place instead of retyped.
+ * Turns the current selection into math, so LaTeX pasted as plain text can be
+ * rendered in place instead of retyped. Shared by the toolbar button and the
+ * Mod+Shift+M shortcut.
  */
+export function applySelectionMath(editor: NoatEditor): void {
+  const block = editor.getTextCursorPosition().block;
+  const math = mathFromSelection(
+    editor.getSelectedText(),
+    blocksToPlainText([block] as NoteFile['blocks'])
+  );
+  if (!math) return;
+  if (math.display) {
+    editor.updateBlock(block, { type: 'equation', props: { latex: math.latex } });
+  } else {
+    editor.insertInlineContent([{ type: 'math', props: { latex: math.latex } }]);
+  }
+  editor.focus();
+}
+
 export function MathToolbarButton() {
   const Components = useComponentsContext();
   const editor = useBlockNoteEditor<
@@ -45,28 +61,13 @@ export function MathToolbarButton() {
 
   if (!Components || !hasSelection) return null;
 
-  const toMath = (): void => {
-    const block = editor.getTextCursorPosition().block;
-    const math = mathFromSelection(
-      editor.getSelectedText(),
-      blocksToPlainText([block] as NoteFile['blocks'])
-    );
-    if (!math) return;
-    if (math.display) {
-      editor.updateBlock(block, { type: 'equation', props: { latex: math.latex } });
-    } else {
-      editor.insertInlineContent([{ type: 'math', props: { latex: math.latex } }]);
-    }
-    editor.focus();
-  };
-
   return (
     <Components.FormattingToolbar.Button
       className="bn-button"
       label="Math"
       mainTooltip="Render as math"
       icon={<span>{'∑'}</span>}
-      onClick={toMath}
+      onClick={() => applySelectionMath(editor)}
     />
   );
 }

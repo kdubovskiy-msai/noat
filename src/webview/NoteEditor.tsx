@@ -13,7 +13,7 @@ import {
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { NOTE_ICON, noteIconForStorage, resolveNoteIcon } from '../core/display-icons';
 import { type NoteFile, serializeNote } from '../core/note';
-import { MathToolbarButton } from './MathToolbarButton';
+import { MathToolbarButton, applySelectionMath } from './MathToolbarButton';
 import { NoteIconPicker } from './NoteIconPicker';
 import { resolveAssetUrl, saveAsset } from './asset-client';
 import { caretTargetAfterRewrite, flattenBlockIds } from './caret-fallback';
@@ -303,7 +303,8 @@ export function NoteEditor({
 
   // Slack-style code formatting: Mod+Shift+C toggles inline code on the
   // selection, Mod+Shift+Alt+C toggles the selected blocks into a code block.
-  // Mod+Shift+. and Mod+Shift+, toggle superscript and subscript. Runs in the
+  // Mod+Shift+. and Mod+Shift+, toggle superscript and subscript, and
+  // Mod+Shift+M renders the selection as math. Runs in the
   // capture phase so nothing inside ProseMirror can consume the event first.
   // event.code is used because Alt+C produces a different event.key on macOS,
   // and because Shift turns "." and "," into ">" and "<".
@@ -318,6 +319,7 @@ export function NoteEditor({
       KeyC: () => (event.altKey ? toggleCodeBlock() : editor.toggleStyles({ code: true })),
       Period: () => toggleVertical('superscript'),
       Comma: () => toggleVertical('subscript'),
+      KeyM: () => applySelectionMath(editor),
     }[event.code];
     if (!action) return;
     event.preventDefault();

@@ -15,7 +15,7 @@ Notes open as normal editor tabs with a Notion-style block editor: type `/` for 
 
 ### LaTeX math
 
-Write `$E = mc^2$` inline or `$$` for a display equation and it renders with KaTeX, locally, with no network. Click a formula to edit its LaTeX. Both are also in the `/` menu under "Math". Pasted LaTeX doesn't need retyping: select it and hit the ∑ button in the formatting toolbar. Formulas round-trip through markdown, so agents can write them over MCP, and PDF export typesets them rather than printing the source.
+Write `$E = mc^2$` inline or `$$` for a display equation and it renders with KaTeX, locally, with no network. Click a formula to edit its LaTeX. Both are also in the `/` menu under "Math". Pasted LaTeX doesn't need retyping: select it and hit `Cmd+Shift+M`, or the ∑ button in the formatting toolbar (`Ctrl` on Windows/Linux). Formulas round-trip through markdown, so agents can write them over MCP, and PDF export typesets them rather than printing the source.
 
 ### Link to code with `@`
 
