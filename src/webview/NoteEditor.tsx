@@ -3,13 +3,17 @@ import { SuggestionMenu, filterSuggestionItems } from '@blocknote/core/extension
 import { BlockNoteView } from '@blocknote/mantine';
 import {
   type DefaultReactSuggestionItem,
+  FormattingToolbar,
+  FormattingToolbarController,
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
+  getFormattingToolbarItems,
   useCreateBlockNote,
 } from '@blocknote/react';
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { NOTE_ICON, noteIconForStorage, resolveNoteIcon } from '../core/display-icons';
 import { type NoteFile, serializeNote } from '../core/note';
+import { MathToolbarButton } from './MathToolbarButton';
 import { NoteIconPicker } from './NoteIconPicker';
 import { resolveAssetUrl, saveAsset } from './asset-client';
 import { caretTargetAfterRewrite, flattenBlockIds } from './caret-fallback';
@@ -352,11 +356,21 @@ export function NoteEditor({
           editor={editor}
           theme={isDark ? 'dark' : 'light'}
           slashMenu={false}
+          formattingToolbar={false}
           onChange={() => {
             if (applyingExternal.current) return;
             emit(title, icon);
           }}
         >
+          {/* Replaces the default formatting toolbar to add the math button. */}
+          <FormattingToolbarController
+            formattingToolbar={() => (
+              <FormattingToolbar>
+                {...getFormattingToolbarItems()}
+                <MathToolbarButton key="math" />
+              </FormattingToolbar>
+            )}
+          />
           <SuggestionMenuController triggerCharacter="@" getItems={getFileItems} />
           {/* Replaces the default slash menu to add the "Page" item; the
               shouldOpen guard matches BlockNote's default (no menu inside
